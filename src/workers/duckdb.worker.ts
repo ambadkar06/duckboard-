@@ -54,12 +54,10 @@ class DuckDBWorkerImpl implements DuckDBWorker {
       const logger = (duckdb as any).VoidLogger ? new (duckdb as any).VoidLogger() : new duckdb.ConsoleLogger()
       // Fallback safeguard: if ConsoleLogger is used, neutralize its log method
       if (!(duckdb as any).VoidLogger && logger && typeof (logger as any).log === 'function') {
-        try { (logger as any).log = () => {} } catch {}
+        try { (logger as any).log = () => {} } catch (_e) { /* noop */ }
       }
       this.db = new duckdb.AsyncDuckDB(logger, worker)
       
-      const isolated = (self as any).crossOriginIsolated === true
-      const threadsEnabled = !!bundle.pthreadWorker
       // Normalize null to undefined for pthreadWorker to satisfy typings
       await this.db.instantiate(bundle.mainModule, bundle.pthreadWorker ?? undefined)
       this.conn = await this.db.connect()
@@ -96,11 +94,8 @@ class DuckDBWorkerImpl implements DuckDBWorker {
     this.currentQueryController = new AbortController()
     
     try {
-      const startTime = performance.now()
-      
       const result = await this.conn.query(sql)
       
-      const endTime = performance.now()
       
       // Convert Arrow result to plain objects via field names
       const rows = result.toArray().map((row: any) => {
@@ -125,14 +120,12 @@ class DuckDBWorkerImpl implements DuckDBWorker {
     }
   }
 
-  async queryStream(sql: string): Promise<{ columns: string[], data: any[][], totalRows: number }> {
+  async queryStream(sql: string, _batchSize?: number): Promise<{ columns: string[], data: any[][], totalRows: number }> {
     if (!this.conn) throw new Error('Database not connected')
     
     try {
-      const startTime = performance.now()
-      
       const result = await this.conn.query(sql)
-      const endTime = performance.now()
+      
       
       // Get column names
       const columns = result.schema.fields.map(field => field.name)
@@ -228,13 +221,10 @@ class DuckDBWorkerImpl implements DuckDBWorker {
       if (!cleanSql.trim()) throw new Error('No SQL provided for COPY-to-Parquet')
       // Write Parquet directly inside DuckDB WASM virtual filesystem
       const copySql = `COPY (${cleanSql}) TO '${fileName}' (FORMAT PARQUET)`
-      const startTime = performance.now()
       await this.conn.query(copySql)
-      const endTime = performance.now()
 
       // Read the generated file back as a Uint8Array for streaming to main thread
       // AsyncDuckDB exposes copy-to-buffer utility for the virtual FS
-      // @ts-ignore
       const buffer: Uint8Array = await (this.db as any).copyFileToBuffer(fileName)
       return buffer
     } catch (error) {
@@ -293,14 +283,13 @@ self.addEventListener('message', (event: MessageEvent) => {
   const data = event.data as any
   if (data && data.__duckdb_comlink_init__ && data.port && !exposed) {
     const port: MessagePort = data.port as MessagePort
-    // @ts-ignore
     port.start?.()
     // Expose a plain function API wrapper to avoid prototype edge cases
     const api: DuckDBWorker = {
       initialize: () => workerImpl.initialize(),
       registerFile: (name, buffer) => workerImpl.registerFile(name, buffer),
       query: (sql) => workerImpl.query(sql),
-      queryStream: (sql, batchSize) => workerImpl.queryStream(sql),
+      queryStream: (sql, batchSize) => workerImpl.queryStream(sql, batchSize),
       cancelQuery: () => workerImpl.cancelQuery(),
       getTableInfo: (tableName) => workerImpl.getTableInfo(tableName),
       createView: (viewName, fileName, fileType) => workerImpl.createView(viewName, fileName, fileType),

@@ -3,14 +3,9 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import { registerServiceWorker, unregisterServiceWorker } from './utils/sw.ts'
-import * as monaco from 'monaco-editor'
 
 // Configure Monaco to load language workers in Vite
 // Must be set before using monaco.editor
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 self.MonacoEnvironment = {
   getWorker: function (_moduleId: string, label: string) {
     switch (label) {

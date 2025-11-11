@@ -83,9 +83,7 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const channel = new MessageChannel()
       const portMain = channel.port1
       const portWorker = channel.port2
-      // @ts-ignore
       portMain.start?.()
-      // @ts-ignore
       portWorker.start?.()
       dbWorker.postMessage({ __duckdb_comlink_init__: true, port: portWorker }, [portWorker])
 

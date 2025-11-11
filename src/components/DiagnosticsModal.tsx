@@ -9,8 +9,6 @@ interface DiagnosticsModalProps {
 export const DiagnosticsModal: React.FC<DiagnosticsModalProps> = ({ open, onClose }) => {
   const { diagnostics, refreshDiagnostics } = useDuckDB()
 
-  if (!open) return null
-
   // Helpers
   const fmtBoolChip = (val: boolean | undefined) => {
     const v = Boolean(val)
@@ -51,13 +49,17 @@ export const DiagnosticsModal: React.FC<DiagnosticsModalProps> = ({ open, onClos
     <span style={{ fontSize: 12, fontWeight: 600 }}>{ms != null ? `${Math.round(ms)} ms` : '—'}</span>
   )
 
+  // Always call hooks; conditionally activate based on `open` to satisfy rules-of-hooks
   useEffect(() => {
+    if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [open, onClose])
+
+  if (!open) return null
 
   return (
     <div

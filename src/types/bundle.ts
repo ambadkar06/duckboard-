@@ -342,15 +342,7 @@ export async function downloadBundlePdf(
     doc.setFont('courier', 'normal')
     doc.setFontSize(10)
     // Determine effective chart type for PDF image (avoid line on nominal x)
-    const xTypeForDerived = (() => {
-      const sample = rows.slice(0, 10).map(r => r[bundle.chartConfig!.xField])
-      const allNumeric = sample.filter(v => v !== null && v !== undefined).every(v => !isNaN(Number(v)))
-      if (allNumeric) return 'quantitative'
-      const allDates = sample.filter(v => v !== null && v !== undefined).every(v => !isNaN(Date.parse(v)))
-      if (allDates) return 'temporal'
-      const unique = new Set(sample)
-      return unique.size <= 10 ? 'ordinal' : 'nominal'
-    })()
+    // (removed) derived x type variable was unused
     const derived: any = {
       type: bundle.chartConfig.type,
       xField: bundle.chartConfig.xField,
@@ -401,7 +393,7 @@ export async function downloadBundlePdf(
       const cfg = bundle.chartConfig
       const xType = getFieldType(chartData, cfg.xField)
       const yType = cfg.yField ? getFieldType(chartData, cfg.yField) : undefined
-      const aggregateVL = yType === 'quantitative' ? 'sum' : 'count'
+      // (removed) helper variable was unused; aggregate encoded directly below
 
       const vlSpec: any = {
         $schema: 'https://vega.github.io/schema/vega-lite/v5.json',

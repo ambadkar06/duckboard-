@@ -46,7 +46,7 @@ export function ChartBuilder() {
   const vegaLiteSpec = useMemo(() => {
     if (!data || data.length === 0 || !xField) return null
 
-    let spec: any = {
+    const spec: any = {
       $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
       data: { values: data },
       width: 'container',

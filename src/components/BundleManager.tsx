@@ -1,11 +1,10 @@
 import { useState, useRef } from 'react'
 import { useStore } from '../store/store'
 import { createBundle, downloadBundlePdf, loadBundle, type BundlePdfOptions } from '../types/bundle'
-import { useDuckDB } from '../providers/DuckDBProvider'
+// import { useDuckDB } from '../providers/DuckDBProvider'
 
 export function BundleManager() {
   const store = useStore()
-  const { worker: _worker } = useDuckDB()
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
