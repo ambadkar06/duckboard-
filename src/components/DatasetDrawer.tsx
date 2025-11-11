@@ -75,7 +75,7 @@ export function DatasetDrawer({ isOpen, onClose }: DatasetDrawerProps) {
           createdAt: new Date()
         })
         
-        console.log(`Successfully loaded ${fileName} as ${tableName}`)
+        
       } catch (error) {
         console.error(`Failed to load ${fileName}:`, error)
         alert(`Failed to load ${fileName}: ${error instanceof Error ? error.message : 'Unknown error'}`)

@@ -70,6 +70,9 @@ export interface BundlePdfOptions {
   includeCharts?: boolean
   maxResultRows?: number
   optimizeWideTables?: boolean
+  includeCover?: boolean
+  includeTOC?: boolean
+  includeChartCaptions?: boolean
 }
 
 // Validation function
@@ -137,12 +140,34 @@ export async function downloadBundlePdf(
     includeResults = true,
     includeCharts = true,
     maxResultRows = 50,
-    optimizeWideTables = true
+    optimizeWideTables = true,
+    includeCover = false,
+    includeTOC = false,
+    includeChartCaptions = true
   } = options
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(11)
   let y = 60
+
+  // Optional cover section
+  if (includeCover) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(20)
+    doc.text(bundle.metadata.name || 'Duckboard Report', 40, y)
+    y += 24
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(11)
+    const dateStr = new Date(bundle.createdAt).toLocaleString()
+    doc.text(`Created: ${dateStr}`, 40, y)
+    y += 16
+    if (bundle.metadata.description) {
+      const descLines = doc.splitTextToSize(String(bundle.metadata.description), 515)
+      doc.text(descLines, 40, y)
+      y += descLines.length * 14
+    }
+    y += 10
+  }
 
   // Checklist section summarizing selected items
   const checklist: { item: string; included: boolean }[] = [
@@ -153,13 +178,14 @@ export async function downloadBundlePdf(
     { item: 'Charts section', included: includeCharts && !!bundle.chartConfig }
   ]
   doc.setFont('helvetica', 'bold')
-  doc.text('Checklist', 40, y)
+  doc.text(includeTOC ? 'Table of Contents' : 'Checklist', 40, y)
   y += 12
   autoTable(doc, {
     startY: y,
     head: [['Item', 'Included']],
-    body: checklist.map(c => [c.item, c.included ? '☑' : '☐']),
-    styles: { fontSize: 10 }
+    body: checklist.map(c => [c.item, c.included ? 'Yes' : 'No']),
+    styles: { fontSize: 10 },
+    columnStyles: { 1: { halign: 'center' } }
   })
   y = (doc as any).lastAutoTable.finalY + 20
 
@@ -440,7 +466,29 @@ export async function downloadBundlePdf(
         y = 40
       }
       doc.addImage(dataUrl, 'PNG', 40, y, imgWidth, imgHeight)
-      y += imgHeight + 10
+      // Optional chart caption
+      if (includeChartCaptions) {
+        const caption = `Figure: ${cfg.type} chart of ${cfg.xField}${cfg.yField ? ` vs ${cfg.yField}` : ''}`
+        const captionY = y + imgHeight + 12
+        // Page-break guard for caption
+        if (captionY > pageHeight - bottomMargin) {
+          doc.addPage()
+          y = 40
+          doc.setFont('helvetica', 'italic')
+          doc.setFontSize(10)
+          doc.text(caption, 40, y)
+          y += 12
+          doc.setFont('helvetica', 'normal')
+        } else {
+          doc.setFont('helvetica', 'italic')
+          doc.setFontSize(10)
+          doc.text(caption, 40, captionY)
+          doc.setFont('helvetica', 'normal')
+          y = captionY + 10
+        }
+      } else {
+        y += imgHeight + 10
+      }
     } catch (e) {
       // If chart rendering fails, continue without image
       doc.setFont('helvetica', 'italic')

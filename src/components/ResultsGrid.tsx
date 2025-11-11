@@ -1,11 +1,14 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useStore } from '../store/store'
 import { VariableSizeGrid as Grid } from 'react-window'
+import { useDuckDB } from '../providers/DuckDBProvider'
 
 
 
 export function ResultsGrid() {
-  const { queryResult, queryStatus } = useStore()
+  const { queryResult, queryStatus, currentQuery } = useStore()
+  const { worker } = useDuckDB()
+  const [isDownloading, setIsDownloading] = useState(false)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
   const containerRef = useCallback((node: HTMLDivElement | null) => {
     if (node) {
@@ -163,8 +166,36 @@ export function ResultsGrid() {
         <div>
           Results: {data.length.toLocaleString()} rows × {columns.length} columns
         </div>
-        <div>
-          {/* Execution time will be added when query performance tracking is implemented */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            className="btn"
+            disabled={isDownloading || queryStatus.isRunning || !worker || !(currentQuery && currentQuery.trim())}
+            onClick={async () => {
+              if (!worker || !currentQuery) return
+              setIsDownloading(true)
+              try {
+                const buf = await (worker as any).copyQueryToParquet(currentQuery, 'result.parquet')
+                const blob = new Blob([buf], { type: 'application/x-parquet' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'result.parquet'
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+              } catch (error) {
+                console.error('Parquet download failed:', error)
+                alert(`Parquet download failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+              } finally {
+                setIsDownloading(false)
+              }
+            }}
+            style={{ fontSize: '12px' }}
+          >
+            {isDownloading ? '⏳' : '⬇️'}
+            Download Parquet (COPY)
+          </button>
         </div>
       </div>
       

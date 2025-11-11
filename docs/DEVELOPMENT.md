@@ -100,6 +100,14 @@ npm run format
 - Handles CSV and Parquet file processing
 - Provides SQL execution capabilities
 
+#### Runtime bundle selection and threads/SIMD fallback
+The worker selects a DuckDB-WASM bundle at runtime using `duckdb.selectBundle` (see `src/workers/duckdb.worker.ts`). On initialization, we log:
+- `crossOriginIsolated` (whether COOP/COEP is set; controls threading)
+- `threads` (enabled when a `pthreadWorker` is available)
+- the selected module URL (MVP or EH build)
+
+When hosting on platforms without COOP/COEP (e.g., some GitHub Pages setups), threads are disabled and the app falls back to a non-threaded bundle automatically. Functionality remains the same; performance on very large queries may be lower.
+
 ### State Management (Zustand)
 ```typescript
 // Example: Adding a new state property

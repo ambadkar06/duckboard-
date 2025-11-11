@@ -100,7 +100,7 @@ export const useStore = create<AppState>()(
         const hasStoredSession = localStorage.getItem('duckboard-store') !== null
         if (hasStoredSession) {
           // Session will be automatically restored by persist middleware
-          console.log('Session restored from storage')
+          
         }
       },
       

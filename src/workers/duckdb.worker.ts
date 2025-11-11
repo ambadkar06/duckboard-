@@ -11,20 +11,31 @@ export interface DuckDBWorker {
   createView(viewName: string, fileName: string, fileType: 'csv' | 'parquet'): Promise<void>
   ping(): Promise<string>
   getMethods(): Promise<string[]>
+  copyQueryToParquet(sql: string, fileName?: string): Promise<Uint8Array>
+  getDiagnostics(): Promise<{
+    crossOriginIsolated: boolean
+    threads: boolean
+    module: string | undefined
+    simd: boolean
+    version: string
+    initializationTimeMs?: number
+  }>
 }
 
 class DuckDBWorkerImpl implements DuckDBWorker {
   private db: duckdb.AsyncDuckDB | null = null
   private conn: duckdb.AsyncDuckDBConnection | null = null
   private currentQueryController: AbortController | null = null
+  private lastBundle: { mainModule?: string; pthreadWorker?: string | undefined } | null = null
+  private initializationTimeMs: number | undefined
 
   async initialize(): Promise<void> {
     try {
       // Idempotent: if already initialized, do nothing
       if (this.db && this.conn) {
-        console.log('DuckDB already initialized')
         return
       }
+      const initStart = performance.now()
       // Select bundle based on browser capabilities
       const bundle = await duckdb.selectBundle({
         mvp: {
@@ -39,13 +50,22 @@ class DuckDBWorkerImpl implements DuckDBWorker {
 
       // Create worker and instantiate database
       const worker = new Worker(bundle.mainWorker!)
-      const logger = new duckdb.ConsoleLogger()
+      // Use a silent logger to avoid emitting structured log objects to console
+      const logger = (duckdb as any).VoidLogger ? new (duckdb as any).VoidLogger() : new duckdb.ConsoleLogger()
+      // Fallback safeguard: if ConsoleLogger is used, neutralize its log method
+      if (!(duckdb as any).VoidLogger && logger && typeof (logger as any).log === 'function') {
+        try { (logger as any).log = () => {} } catch {}
+      }
       this.db = new duckdb.AsyncDuckDB(logger, worker)
       
-      await this.db.instantiate(bundle.mainModule, bundle.pthreadWorker)
+      const isolated = (self as any).crossOriginIsolated === true
+      const threadsEnabled = !!bundle.pthreadWorker
+      // Normalize null to undefined for pthreadWorker to satisfy typings
+      await this.db.instantiate(bundle.mainModule, bundle.pthreadWorker ?? undefined)
       this.conn = await this.db.connect()
+      this.lastBundle = { mainModule: bundle.mainModule, pthreadWorker: bundle.pthreadWorker ?? undefined }
+      this.initializationTimeMs = performance.now() - initStart
       
-      console.log('DuckDB initialized successfully')
     } catch (error) {
       console.error('Failed to initialize DuckDB:', error)
       throw new Error(`DuckDB initialization failed: ${error}`)
@@ -59,7 +79,6 @@ class DuckDBWorkerImpl implements DuckDBWorker {
       // Convert ArrayBuffer to Uint8Array for DuckDB
       const uint8Array = new Uint8Array(buffer)
       await this.db.registerFileBuffer(name, uint8Array)
-      console.log(`File registered: ${name}`)
     } catch (error) {
       console.error(`Failed to register file ${name}:`, error)
       throw new Error(`File registration failed: ${error}`)
@@ -77,13 +96,11 @@ class DuckDBWorkerImpl implements DuckDBWorker {
     this.currentQueryController = new AbortController()
     
     try {
-      console.log('Executing query:', sql)
       const startTime = performance.now()
       
       const result = await this.conn.query(sql)
       
       const endTime = performance.now()
-      console.log(`Query completed in ${endTime - startTime}ms`)
       
       // Convert Arrow result to plain objects via field names
       const rows = result.toArray().map((row: any) => {
@@ -99,7 +116,6 @@ class DuckDBWorkerImpl implements DuckDBWorker {
       return rows
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        console.log('Query cancelled')
         return []
       }
       console.error('Query execution failed:', error)
@@ -113,12 +129,10 @@ class DuckDBWorkerImpl implements DuckDBWorker {
     if (!this.conn) throw new Error('Database not connected')
     
     try {
-      console.log('Executing streaming query:', sql)
       const startTime = performance.now()
       
       const result = await this.conn.query(sql)
       const endTime = performance.now()
-      console.log(`Query completed in ${endTime - startTime}ms`)
       
       // Get column names
       const columns = result.schema.fields.map(field => field.name)
@@ -192,7 +206,6 @@ class DuckDBWorkerImpl implements DuckDBWorker {
       }
       
       await this.conn.query(createViewSQL)
-      console.log(`View created: ${viewName} from ${fileName}`)
     } catch (error) {
       console.error(`Failed to create view ${viewName}:`, error)
       throw error
@@ -204,7 +217,70 @@ class DuckDBWorkerImpl implements DuckDBWorker {
   }
 
   async getMethods(): Promise<string[]> {
-    return ['initialize', 'registerFile', 'query', 'queryStream', 'cancelQuery', 'getTableInfo', 'createView', 'ping']
+    return ['initialize', 'registerFile', 'query', 'queryStream', 'cancelQuery', 'getTableInfo', 'createView', 'ping', 'copyQueryToParquet', 'getDiagnostics']
+  }
+
+  async copyQueryToParquet(sql: string, fileName: string = 'result.parquet'): Promise<Uint8Array> {
+    if (!this.conn || !this.db) throw new Error('Database not connected')
+    try {
+      // Sanitize: DuckDB COPY subquery must not end with a semicolon
+      const cleanSql = (sql ?? '').replace(/;\s*$/m, '')
+      if (!cleanSql.trim()) throw new Error('No SQL provided for COPY-to-Parquet')
+      // Write Parquet directly inside DuckDB WASM virtual filesystem
+      const copySql = `COPY (${cleanSql}) TO '${fileName}' (FORMAT PARQUET)`
+      const startTime = performance.now()
+      await this.conn.query(copySql)
+      const endTime = performance.now()
+
+      // Read the generated file back as a Uint8Array for streaming to main thread
+      // AsyncDuckDB exposes copy-to-buffer utility for the virtual FS
+      // @ts-ignore
+      const buffer: Uint8Array = await (this.db as any).copyFileToBuffer(fileName)
+      return buffer
+    } catch (error) {
+      console.error('COPY-to-Parquet failed:', error)
+      throw error
+    }
+  }
+
+  async getDiagnostics(): Promise<{
+    crossOriginIsolated: boolean
+    threads: boolean
+    module: string | undefined
+    simd: boolean
+    version: string
+    initializationTimeMs?: number
+  }> {
+    if (!this.db) throw new Error('Database not initialized')
+    try {
+      const isolated = (self as any).crossOriginIsolated === true
+      let threads = false
+      // Prefer DB API if available; fall back to bundle info
+      if (typeof (this.db as any).isThreadsEnabled === 'function') {
+        threads = Boolean(await (this.db as any).isThreadsEnabled())
+      } else {
+        threads = Boolean(this.lastBundle?.pthreadWorker)
+      }
+
+      let simd = false
+      if (typeof (this.db as any).isSimdSupported === 'function') {
+        simd = Boolean(await (this.db as any).isSimdSupported())
+      }
+
+      const version = typeof (this.db as any).version === 'function' ? await (this.db as any).version() : 'unknown'
+      const module = this.lastBundle?.mainModule
+      return {
+        crossOriginIsolated: isolated,
+        threads,
+        module,
+        simd,
+        version,
+        initializationTimeMs: this.initializationTimeMs,
+      }
+    } catch (error) {
+      console.error('Failed to get diagnostics:', error)
+      throw error
+    }
   }
 }
 
@@ -230,6 +306,8 @@ self.addEventListener('message', (event: MessageEvent) => {
       createView: (viewName, fileName, fileType) => workerImpl.createView(viewName, fileName, fileType),
       ping: () => workerImpl.ping(),
       getMethods: () => workerImpl.getMethods(),
+      copyQueryToParquet: (sql, fileName) => workerImpl.copyQueryToParquet(sql, fileName),
+      getDiagnostics: () => workerImpl.getDiagnostics(),
     }
     Comlink.expose(api, port)
     exposed = true

@@ -1,5 +1,7 @@
 import { useStore } from '../store/store'
 import { BundleManager } from './BundleManager'
+import { useState } from 'react'
+import { DiagnosticsModal } from './DiagnosticsModal'
 
 interface ToolbarProps {
   onToggleDrawer: () => void
@@ -7,6 +9,7 @@ interface ToolbarProps {
 
 export function Toolbar({ onToggleDrawer }: ToolbarProps) {
   const { datasets, clearSession } = useStore()
+  const [showDiagnostics, setShowDiagnostics] = useState(false)
 
   return (
     <div className="header" style={{
@@ -30,6 +33,10 @@ export function Toolbar({ onToggleDrawer }: ToolbarProps) {
       <div style={{ flex: 1 }} />
       
       <BundleManager />
+
+      <button className="btn" title="Diagnostics" onClick={() => setShowDiagnostics(true)}>
+        ⚙️ Diagnostics
+      </button>
       
       <div style={{
         fontSize: '12px',
@@ -48,6 +55,9 @@ export function Toolbar({ onToggleDrawer }: ToolbarProps) {
       >
         Clear Session
       </button>
+      {showDiagnostics && (
+        <DiagnosticsModal open={showDiagnostics} onClose={() => setShowDiagnostics(false)} />
+      )}
     </div>
   )
 }

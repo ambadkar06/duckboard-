@@ -3,19 +3,33 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import * as Comlink from 'comlink'
 import type { DuckDBWorker } from '../workers/duckdb.worker'
 
+interface DuckDBDiagnostics {
+  crossOriginIsolated: boolean
+  threads: boolean
+  module: string | undefined
+  simd: boolean
+  version: string
+  initializationTimeMs?: number
+}
+
 interface DuckDBContextType {
   worker: DuckDBWorker | null
   isInitialized: boolean
+  diagnostics: DuckDBDiagnostics | null
+  refreshDiagnostics: () => Promise<void>
 }
 
 const DuckDBContext = createContext<DuckDBContextType>({
   worker: null,
   isInitialized: false,
+  diagnostics: null,
+  refreshDiagnostics: async () => {}
 })
 
 export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [worker, setWorker] = useState<DuckDBWorker | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
+  const [diagnostics, setDiagnostics] = useState<DuckDBDiagnostics | null>(null)
   const rawWorkerRef = useRef<Worker | null>(null)
   const initAttemptRef = useRef(0)
   const remoteRef = useRef<Comlink.Remote<DuckDBWorker> | null>(null)
@@ -46,7 +60,7 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Helper function to create and wrap a worker properly
     async function createWorkerAPI(): Promise<Comlink.Remote<DuckDBWorker>> {
-      console.log('Creating new DuckDB worker...')
+      
       
       // Step 1: Create the web worker
       const dbWorker = new Worker(
@@ -66,7 +80,6 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       })
 
       // Step 2: Create MessageChannel and send the worker port
-      console.log('Creating MessageChannel and sending port to worker...')
       const channel = new MessageChannel()
       const portMain = channel.port1
       const portWorker = channel.port2
@@ -74,18 +87,9 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       portMain.start?.()
       // @ts-ignore
       portWorker.start?.()
-      // Debug: log all messages arriving on the Comlink MessagePort to identify APPLY targets
-      portMain.addEventListener('message', (event: MessageEvent) => {
-        try {
-          console.log('[Comlink Port message]', event.data)
-        } catch (_) {
-          console.log('[Comlink Port message] (non-serializable)')
-        }
-      })
       dbWorker.postMessage({ __duckdb_comlink_init__: true, port: portWorker }, [portWorker])
 
       // Step 3: Wait for worker readiness acknowledgement
-      console.log('Waiting for worker Comlink ready ack...')
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
           console.error('Worker handshake timeout - did not receive ready ack')
@@ -97,7 +101,6 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           if (data && data.__duckdb_comlink_ready__ === true) {
             clearTimeout(timeout)
             dbWorker.removeEventListener('message', onMessage)
-            console.log('Worker Comlink ready acknowledged')
             resolve()
           }
         }
@@ -105,7 +108,6 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       })
 
       // Step 4: Wrap the main-side port with Comlink
-      console.log('Wrapping MessagePort with Comlink...')
       const remote = Comlink.wrap<DuckDBWorker>(portMain)
       remoteRef.current = remote
       return remote
@@ -114,28 +116,21 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     async function initDuckDB() {
       try {
         initAttemptRef.current += 1
-        console.log(`Init attempt #${initAttemptRef.current}`)
 
         // Create and wrap the worker
         const remote = await createWorkerAPI()
-        console.log('Worker API created, calling initialize...')
 
         // Initialize DuckDB
         await remote.initialize()
-        console.log('DuckDB initialize() completed')
 
         // Verify Comlink channel health
-        console.log('Pinging worker...')
         const pong = await remote.ping()
-        console.log('Ping response:', pong)
         
         if (pong !== 'ok') {
           throw new Error(`DuckDB worker ping failed: ${pong}`)
         }
 
-        console.log('Getting methods...')
         const methods = await remote.getMethods()
-        console.log('DuckDB worker methods available:', methods)
 
         // Check if all required methods are available
         const requiredMethods = ['initialize', 'registerFile', 'query', 'ping']
@@ -147,20 +142,29 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         // Success path
         if (isMounted) {
-          console.log('✅ DuckDB worker initialized and ready')
-          const localApi: DuckDBWorker = {
-            initialize: () => remote.initialize(),
-            registerFile: (name, buffer) => remote.registerFile(name, buffer),
-            query: (sql) => remote.query(sql),
-            queryStream: (sql) => remote.queryStream(sql),
-            cancelQuery: () => remote.cancelQuery(),
-            getTableInfo: (tableName) => remote.getTableInfo(tableName),
-            createView: (viewName, fileName, fileType) => remote.createView(viewName, fileName, fileType),
-            ping: () => remote.ping(),
-            getMethods: () => remote.getMethods(),
-          }
+        const localApi: DuckDBWorker = {
+          initialize: () => remote.initialize(),
+          registerFile: (name, buffer) => remote.registerFile(name, buffer),
+          query: (sql) => remote.query(sql),
+          queryStream: (sql) => remote.queryStream(sql),
+          cancelQuery: () => remote.cancelQuery(),
+          getTableInfo: (tableName) => remote.getTableInfo(tableName),
+          createView: (viewName, fileName, fileType) => remote.createView(viewName, fileName, fileType),
+          ping: () => remote.ping(),
+          getMethods: () => remote.getMethods(),
+          copyQueryToParquet: (sql, fileName?) => remote.copyQueryToParquet(sql, fileName),
+          getDiagnostics: () => remote.getDiagnostics(),
+        }
           setWorker(localApi)
           setIsInitialized(true)
+
+          // Capture diagnostics
+          try {
+            const info = await remote.getDiagnostics()
+            setDiagnostics(info as DuckDBDiagnostics)
+          } catch (e) {
+            console.warn('Unable to fetch diagnostics:', e)
+          }
         }
       } catch (err) {
         console.error('❌ Failed to initialize DuckDB worker:', err)
@@ -177,7 +181,6 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         
         // Optionally retry once after a delay
         if (initAttemptRef.current === 1) {
-          console.log('Will retry initialization in 1 second...')
           setTimeout(() => {
             if (isMounted) {
               initDuckDB()
@@ -190,12 +193,10 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     initDuckDB()
 
     return () => {
-      console.log('DuckDBProvider cleanup')
       isMounted = false
       // In development, React.StrictMode replays effects; avoid terminating the worker
       // during this replay to prevent duplicate endpoints and Comlink finalize races.
       if (!import.meta.env.PROD) {
-        console.log('Dev mode: skipping worker termination during StrictMode cleanup replay')
         return
       }
       // Terminate raw worker on actual unmount in production
@@ -210,7 +211,17 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [])
 
-  const contextValue = useMemo(() => ({ worker, isInitialized }), [worker, isInitialized])
+  const refreshDiagnostics = async () => {
+    if (!remoteRef.current) return
+    try {
+      const info = await remoteRef.current.getDiagnostics()
+      setDiagnostics(info as DuckDBDiagnostics)
+    } catch (e) {
+      console.warn('Unable to refresh diagnostics:', e)
+    }
+  }
+
+  const contextValue = useMemo(() => ({ worker, isInitialized, diagnostics, refreshDiagnostics }), [worker, isInitialized, diagnostics])
   return (
     <DuckDBContext.Provider value={contextValue}>
       {children}

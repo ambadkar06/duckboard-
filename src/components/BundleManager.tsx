@@ -10,6 +10,8 @@ export function BundleManager() {
   const [isImporting, setIsImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showOptions, setShowOptions] = useState(false)
+  const defaultBaseName = `duckboard-${new Date().toISOString().split('T')[0]}`
+  const [pdfName, setPdfName] = useState<string>(`${defaultBaseName}.pdf`)
   const [options, setOptions] = useState<BundlePdfOptions>({
     includeMetadata: true,
     includeQuery: true,
@@ -30,8 +32,14 @@ export function BundleManager() {
     setIsExporting(true)
     setError(null)
     try {
+      // Determine safe filename and base bundle name
+      const rawName = (pdfName || '').trim() || `${defaultBaseName}.pdf`
+      const sanitized = rawName.replace(/[\\/:*?"<>|]/g, '-')
+      const finalName = sanitized.toLowerCase().endsWith('.pdf') ? sanitized : `${sanitized}.pdf`
+      const baseName = finalName.replace(/\.pdf$/i, '')
+
       const bundle = createBundle(
-        `duckboard-${new Date().toISOString().split('T')[0]}`,
+        baseName,
         {
           datasets: store.datasets,
           currentQuery: store.currentQuery,
@@ -42,7 +50,7 @@ export function BundleManager() {
         },
         `Duckboard session exported on ${new Date().toLocaleDateString()}`
       )
-      await downloadBundlePdf(bundle, undefined, options)
+      await downloadBundlePdf(bundle, finalName, options)
       setShowOptions(false)
     } catch (err) {
       setError(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -202,6 +210,24 @@ export function BundleManager() {
               Export PDF – Select Sections
             </div>
             <div style={{ display: 'grid', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label style={{ fontSize: '12px', color: 'var(--muted)' }}>File name</label>
+                <input
+                  type="text"
+                  value={pdfName}
+                  onChange={(e) => setPdfName(e.target.value)}
+                  placeholder={`${defaultBaseName}.pdf`}
+                  style={{
+                    flex: 1,
+                    padding: '4px 6px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg)',
+                    color: 'var(--text)',
+                    fontSize: '12px'
+                  }}
+                />
+              </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
                 <input
                   type="checkbox"
@@ -241,6 +267,30 @@ export function BundleManager() {
                   onChange={(e) => setOptions(o => ({ ...o, includeCharts: e.target.checked }))}
                 />
                 Include charts section
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                <input
+                  type="checkbox"
+                  checked={!!options.includeCover}
+                  onChange={(e) => setOptions(o => ({ ...o, includeCover: e.target.checked }))}
+                />
+                Include cover page (title + description)
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                <input
+                  type="checkbox"
+                  checked={!!options.includeTOC}
+                  onChange={(e) => setOptions(o => ({ ...o, includeTOC: e.target.checked }))}
+                />
+                Rename checklist to Table of Contents
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                <input
+                  type="checkbox"
+                  checked={options.includeChartCaptions ?? true}
+                  onChange={(e) => setOptions(o => ({ ...o, includeChartCaptions: e.target.checked }))}
+                />
+                Add chart captions under images
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
                 <input
