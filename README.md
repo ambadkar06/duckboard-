@@ -1,132 +1,137 @@
-# Duckboard 🦆
+# Duckboard
 
-A privacy-first, serverless analytics studio that runs entirely in your browser. Analyze CSV and Parquet files with SQL and create beautiful charts using DuckDB-WASM.
+Duckboard is a privacy‑first, serverless analytics studio that runs entirely in your browser. Analyze CSV and Parquet files with SQL and create publication‑ready charts using DuckDB‑WASM and Vega‑Lite.
 
-## Features ✨
+## Highlights
 
-- **🔒 Privacy-First**: All data processing happens locally in your browser - no data ever leaves your device
-- **📊 SQL Analytics**: Full SQL support powered by DuckDB-WASM for fast, in-memory analytics
-- **📁 File Support**: Import CSV and Parquet files with drag-and-drop simplicity
-- **📈 Interactive Charts**: Create beautiful visualizations with Vega-Lite
-- **💾 Session Management**: Save and restore your analysis sessions with .duckboard bundles
-- **📱 Progressive Web App**: Works offline as a PWA on desktop and mobile
-- **🚀 Blazing Fast**: DuckDB's columnar engine provides lightning-fast query performance
-- **🎨 Modern UI**: Clean, intuitive interface built with React and TypeScript
+- Privacy‑first local processing: data never leaves the browser.
+- SQL analytics powered by DuckDB‑WASM.
+- CSV and Parquet file support with drag‑and‑drop import.
+- Interactive charting via Vega‑Lite.
+- Session bundles for save/restore (`.duckboard`).
+- Progressive Web App capabilities for offline use.
+- Fast, modern UI built with React and TypeScript.
 
-## Quick Start 🚀
+## Quick Start
 
-1. **Open Duckboard**: Navigate to [duckboard.app](https://duckboard.app) or run locally
-2. **Upload Data**: Drag and drop CSV or Parquet files into the dataset drawer
-3. **Write SQL**: Use the Monaco SQL editor with syntax highlighting and auto-completion
-4. **Visualize**: Create charts with the Vega-Lite chart builder
-5. **Export**: Save your session as a .duckboard bundle to share or restore later
+- Install Node.js 18 or later.
+- Install dependencies: `npm install`.
+- Start the dev server: `npm run dev`.
+- Open the app and drag CSV/Parquet files into the Dataset Drawer.
+- Write SQL in the editor and view results and charts.
 
-## Development 🛠️
+## Development
 
 ### Prerequisites
 
-- Node.js 18+ 
-- npm, yarn, or pnpm
+- Node.js `>=18`
+- npm (or yarn/pnpm)
 
-### Setup
+### Common Commands
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/duckboard.git
-cd duckboard
-
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Run tests
-npm run test
-npm run test:e2e
-
-# Build for production
-npm run build
-```
+- `npm run dev` — start the development server (Vite).
+- `npm run build` — type‑check and build for production.
+- `npm run preview` — preview the production build locally.
+- `npm run test` — run unit tests (Vitest).
+- `npm run test:e2e` — run end‑to‑end tests (Playwright).
+- `npm run type-check` — TypeScript type checking.
+- `npm run lint` — lint the codebase.
+- `npm run format` — format the codebase with Prettier.
 
 ### Project Structure
 
 ```
 src/
 ├── components/          # React components
+│   ├── BundleManager.tsx     # Bundle import/export and PDF export UI
 │   ├── ChartBuilder.tsx      # Vega-Lite chart builder
 │   ├── DatasetDrawer.tsx     # File upload and dataset management
+│   ├── DiagnosticsModal.tsx  # DuckDB engine diagnostics viewer
 │   ├── ResultsGrid.tsx       # Virtualized query results
-│   ├── SQLEditor.tsx         # Monaco SQL editor
-│   └── BundleManager.tsx     # Export/import functionality
-├── providers/         # React context providers
-│   └── DuckDBProvider.tsx    # DuckDB worker integration
-├── store/             # Zustand state management
-│   └── store.ts              # Global application state
-├── workers/           # Web Workers
-│   └── duckdb.worker.ts      # DuckDB-WASM worker
-├── types/             # TypeScript type definitions
-│   ├── index.ts              # Core types
-│   └── bundle.ts             # Bundle export/import types
-└── utils/             # Utility functions
-    └── sw.ts                   # Service worker registration
+│   ├── SQLEditor.tsx         # SQL editor
+│   └── Toolbar.tsx           # Top toolbar controls
+├── providers/
+│   └── DuckDBProvider.tsx    # Worker lifecycle and diagnostics context
+├── store/
+│   └── store.ts              # Zustand application state
+├── types/
+│   ├── bundle.ts             # Bundle schema, PDF export utilities
+│   └── index.ts              # Core types
+├── workers/
+│   └── duckdb.worker.ts      # DuckDB‑WASM worker implementation
+└── utils/
+    └── sw.ts                 # Service worker registration
 ```
 
-## Architecture 🏗️
+## Architecture
 
-### Core Technologies
+### Overview
 
-- **Frontend**: React 18, TypeScript, Vite
-- **Database**: DuckDB-WASM for in-browser SQL processing
-- **State Management**: Zustand with persistence
-- **UI Components**: Custom components with inline styles
-- **Charts**: Vega-Lite for interactive visualizations
-- **Editor**: Monaco Editor for SQL editing
-- **Virtualization**: react-window for large result sets
+- Frontend: React 18, TypeScript, Vite.
+- Database: DuckDB‑WASM executing entirely in a Web Worker.
+- Worker bridge: Comlink is used to expose a typed API from the worker.
+- State: Zustand for lightweight state management with selective persistence.
+- Charts: Vega‑Lite for specification‑driven visualization.
+- PDF export: jsPDF + `jspdf-autotable` to produce a self‑contained report.
 
-### Data Flow
+### Execution Model
 
-1. **File Upload**: Files are processed in the browser using DuckDB-WASM
-2. **SQL Execution**: Queries run in a Web Worker to avoid blocking the UI
-3. **Results Display**: Virtualized grids handle large result sets efficiently
-4. **Chart Creation**: Vega-Lite specs are generated from query results
-5. **Bundle Export**: Sessions are serialized with Zod validation
+- File ingestion and SQL execution run in a dedicated worker (`duckdb.worker.ts`) to keep the UI responsive.
+- The provider (`DuckDBProvider.tsx`) establishes a MessageChannel, wraps it with Comlink, initializes DuckDB, and surfaces diagnostics to the UI.
+- Results are rendered in a virtualized grid; chart configuration is driven from query outputs.
 
-### Security & Privacy
+### Diagnostics
 
-- **Local Processing**: All data stays in your browser
-- **No External Requests**: No analytics, tracking, or data transmission
-- **PWA Support**: Works offline without internet connection
-- **File Access**: Direct file access via File API, no server upload
+- The worker exposes `getDiagnostics()` including: cross‑origin isolation, threads availability, selected module, SIMD support, DuckDB version, and initialization time.
+- The Diagnostics Modal provides a concise view and allows refreshing diagnostics.
 
-## Browser Support 🌐
+## Export and Import
 
-- Chrome 89+ (recommended)
+### Session Bundles
+
+- Duckboard can serialize the current session (datasets metadata, current query, results, chart config, and panel state) to a `.duckboard` file with Zod validation.
+- Bundles can be imported to restore the session’s state.
+
+### PDF Export
+
+- Use the Export dialog (Bundle Manager) to select sections and export to PDF.
+- A filename field allows specifying the output name; disallowed characters are sanitized and `.pdf` is enforced.
+- The “Included” checklist uses clear Yes/No values for reliable rendering.
+- Options include cover page, table of contents label, chart captions, and wide‑table optimization (landscape and column chunking).
+
+## Security and Privacy
+
+- All computations run locally in the browser; no server‑side processing.
+- No analytics or tracking requests are performed.
+- PWA support allows offline operation.
+
+## Browser Support
+
+- Chrome 89+
 - Firefox 78+
 - Safari 14+
 - Edge 89+
 
-## Contributing 🤝
+## Testing
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes and add tests
-4. Run tests: `npm run test`
-5. Commit your changes: `git commit -am 'Add feature'`
-6. Push to the branch: `git push origin feature-name`
-7. Submit a pull request
+- Unit tests: `npm run test` (Vitest).
+- End‑to‑end tests: `npm run test:e2e` (Playwright).
+- Test setup is under `src/test` and `e2e/`.
 
-## License 📄
+## Contributing
 
-MIT License - see [LICENSE](LICENSE) file for details.
+- Fork the repository and create a feature branch.
+- Keep changes focused and covered by tests where applicable.
+- Ensure `npm run type-check` and `npm run lint` pass.
+- Submit a pull request describing the motivation and changes.
 
-## Acknowledgments 🙏
+## License
 
-- [DuckDB](https://duckdb.org/) for the amazing embedded database
-- [Vega-Lite](https://vega.github.io/vega-lite/) for powerful visualization grammar
-- [Monaco Editor](https://microsoft.github.io/monaco-editor/) for the SQL editor
-- [Vite](https://vitejs.dev/) for the fast build tool
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) for details.
 
----
+## Acknowledgements
 
-**Made with ❤️ for the data community**
+- DuckDB for the embedded analytics database.
+- Vega‑Lite for the visualization grammar.
+- Monaco Editor for the SQL editing experience.
+- Vite for the fast development and build tooling.
