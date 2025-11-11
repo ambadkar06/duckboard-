@@ -1,0 +1,25 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.cache/
+
+# Vite/Vitest/Playwright
+.vite/
+.vitest/
+playwright-report/
+test-results/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS and misc
+.DS_Store
+.idea/
+.vscode/
+
+# Env files (none used, but keep private if added)
+.env*

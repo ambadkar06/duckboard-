@@ -1,0 +1,44 @@
+# Duckboard Dependencies
+# This file documents all required dependencies for the project
+# Use npm install to install all dependencies from package.json
+
+# Core Runtime Dependencies
+@duckdb/duckdb-wasm@1.28.0     # DuckDB WebAssembly engine for in-browser SQL
+comlink@4.4.1                   # Web Worker communication library
+jszip@3.10.1                     # ZIP file creation for bundle exports
+monaco-editor@0.44.0             # Code editor component for SQL editing
+react@18.2.0                     # React framework
+react-dom@18.2.0                 # React DOM renderer
+react-virtualized@9.22.5         # Virtualized lists for large datasets
+uuid@9.0.1                       # Unique identifier generation
+vega@5.26.1                      # Visualization grammar library
+vega-embed@6.24.0                # Vega chart embedding component
+vega-lite@5.16.3                 # High-level visualization grammar
+zod@3.22.4                       # Schema validation for data integrity
+zustand@4.4.7                    # Lightweight state management
+
+# Development Dependencies
+@playwright/test@1.40.1          # End-to-end testing framework
+@types/react@18.2.43              # React TypeScript definitions
+@types/react-dom@18.2.17            # React DOM TypeScript definitions
+@types/react-virtualized@9.21.29    # React Virtualized TypeScript definitions
+@types/uuid@9.0.7                   # UUID TypeScript definitions
+@typescript-eslint/eslint-plugin@6.14.0  # TypeScript ESLint rules
+@typescript-eslint/parser@6.14.0     # TypeScript parser for ESLint
+@vite-pwa/assets-generator@0.2.4    # PWA asset generation tool
+@vitejs/plugin-react@4.2.1           # React plugin for Vite
+eslint@8.55.0                        # JavaScript/TypeScript linting
+eslint-plugin-react-hooks@4.6.0      # React hooks linting rules
+eslint-plugin-react-refresh@0.4.5    # React refresh linting
+prettier@3.1.1                       # Code formatting tool
+typescript@5.2.2                     # TypeScript compiler
+vite@5.0.8                          # Fast build tool and dev server
+vite-plugin-pwa@0.17.4               # PWA plugin for Vite
+vitest@1.0.4                         # Unit testing framework
+
+# Installation Command:
+# npm install
+
+# Alternative package managers:
+# yarn install
+# pnpm install
