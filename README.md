@@ -1,7 +1,7 @@
 # Duckboard
 
 Duckboard is a privacy‑first, serverless analytics studio that runs entirely in your browser. Analyze CSV and Parquet files with SQL and create publication‑ready charts using DuckDB‑WASM and Vega‑Lite.
-
+Live: https://duckboard-mvgt.vercel.app/
 ## Highlights
 
 - Privacy‑first local processing: data never leaves the browser.
