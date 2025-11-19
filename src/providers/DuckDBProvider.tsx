@@ -92,7 +92,7 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
           console.error('Worker handshake timeout - did not receive ready ack')
-          try { unregisterServiceWorker() } catch (_) { }
+          try { unregisterServiceWorker() } catch (e) { void e }
           reject(new Error('Worker handshake timeout'))
         }, 12000)
 
