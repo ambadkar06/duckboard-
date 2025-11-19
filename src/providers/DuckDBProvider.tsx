@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import * as Comlink from 'comlink'
 import type { DuckDBWorker } from '../workers/duckdb.worker'
+import { unregisterServiceWorker } from '../utils/sw'
 
 interface DuckDBDiagnostics {
   crossOriginIsolated: boolean
@@ -91,8 +92,9 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
           console.error('Worker handshake timeout - did not receive ready ack')
+          try { unregisterServiceWorker() } catch (_) { }
           reject(new Error('Worker handshake timeout'))
-        }, 5000)
+        }, 12000)
 
         const onMessage = (event: MessageEvent) => {
           const data = event.data as any
@@ -178,12 +180,12 @@ export const DuckDBProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         rawWorkerRef.current = null
         
         // Optionally retry once after a delay
-        if (initAttemptRef.current === 1) {
+        if (initAttemptRef.current <= 2) {
           setTimeout(() => {
             if (isMounted) {
               initDuckDB()
             }
-          }, 1000)
+          }, 1500)
         }
       }
     }

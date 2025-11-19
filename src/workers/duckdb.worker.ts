@@ -187,7 +187,7 @@ class DuckDBWorkerImpl implements DuckDBWorker {
       if (fileType === 'csv') {
         createViewSQL = `
           CREATE OR REPLACE VIEW ${viewName} AS
-          SELECT * FROM read_csv_auto('${fileName}')
+          SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true, normalize_names=true)
         `
       } else if (fileType === 'parquet') {
         createViewSQL = `

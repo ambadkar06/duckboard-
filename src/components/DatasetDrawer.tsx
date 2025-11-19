@@ -34,8 +34,30 @@ export function DatasetDrawer({ isOpen, onClose }: DatasetDrawerProps) {
       }
 
       try {
-        // Read file as ArrayBuffer
         const buffer = await file.arrayBuffer()
+        const bytes = new Uint8Array(buffer)
+        let transcoded: ArrayBuffer = buffer
+        const tryDecode = (label: string) => {
+          try {
+            const td = new TextDecoder(label as any, { fatal: true } as any)
+            return td.decode(bytes)
+          } catch {
+            return null
+          }
+        }
+        let text = tryDecode('utf-8')
+        if (!text) {
+          if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+            text = new TextDecoder('utf-16le').decode(bytes)
+          } else if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+            text = new TextDecoder('utf-16be').decode(bytes)
+          } else {
+            text = tryDecode('windows-1252') || tryDecode('iso-8859-1')
+          }
+        }
+        if (text) {
+          transcoded = new TextEncoder().encode(text).buffer
+        }
         
         // Ensure Comlink-exposed method is present
         const hasRegister = typeof (worker as any).registerFile === 'function'
@@ -43,7 +65,7 @@ export function DatasetDrawer({ isOpen, onClose }: DatasetDrawerProps) {
           throw new Error('DuckDB worker not ready: registerFile missing')
         }
         // Register file with DuckDB
-        await worker.registerFile(fileName, buffer)
+        await worker.registerFile(fileName, transcoded)
         
         // Create a view from the file
         const tableName = fileName.replace(/\.(csv|parquet)$/i, '').replace(/[^a-zA-Z0-9_]/g, '_')

@@ -10,6 +10,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json,wasm}'],
+        globIgnores: ['**/*worker*.js'],
         maximumFileSizeToCacheInBytes: 5000000, // 5MB
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
